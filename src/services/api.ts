@@ -326,18 +326,44 @@ function parseLength(len: string): number {
   return 0
 }
 
-export async function getUserVideos(mid: number, page = 1, pageSize = 30): Promise<{ items: UpVideo[]; total: number }> {
-  const { getUserVideos: rendererUserVideos } = await import('@/services/bilibiliApi')
-  const data = await rendererUserVideos(mid, page, pageSize)
-  const items = (data.list?.vlist || []).map((v) => ({
-    bvid: v.bvid,
-    title: v.title?.replace(/<[^>]+>/g, '') || '',
-    coverUrl: normalizePic(v.pic),
-    duration: parseLength(v.length),
-    play: v.play || 0,
-    created: v.created || 0,
-  }))
-  return { items, total: data.page?.count || 0 }
+export async function getUserVideos(
+  mid: number,
+  page = 1,
+  pageSize = 30,
+  authorName?: string,
+): Promise<{ items: UpVideo[]; total: number }> {
+  const { getUserVideos: rendererUserVideos, searchVideo } = await import('@/services/bilibiliApi')
+
+  // 主路径：UP 主投稿列表（WBI 签名）。该接口易被 B 站风控拦截返回 412 HTML。
+  try {
+    const data = await rendererUserVideos(mid, page, pageSize)
+    const items = (data.list?.vlist || []).map((v) => ({
+      bvid: v.bvid,
+      title: v.title?.replace(/<[^>]+>/g, '') || '',
+      coverUrl: normalizePic(v.pic),
+      duration: parseLength(v.length),
+      play: v.play || 0,
+      created: v.created || 0,
+    }))
+    return { items, total: data.page?.count || 0 }
+  } catch (primaryError) {
+    // 降级路径：按 UP 主名搜索视频，只保留作者精确匹配的条目。
+    // 搜索接口（wbi/search/type）风控较宽松，实测可稳定返回目标 UP 主投稿。
+    if (!authorName) throw primaryError
+    const data = await searchVideo(authorName, page, pageSize)
+    const matched = (data.result || []).filter((v) => v.author === authorName)
+    const items = matched.map((v) => ({
+      bvid: v.bvid,
+      title: v.title?.replace(/<[^>]+>/g, '') || '',
+      coverUrl: normalizePic(v.pic),
+      duration: parseLength(v.duration),
+      play: v.play || 0,
+      created: v.pubdate || 0,
+    }))
+    if (items.length === 0) throw primaryError
+    // 搜索结果总数包含其他 UP 主的同名内容，仅作为“有更多”的参考上限
+    return { items, total: data.numResults || items.length }
+  }
 }
 
 // ===== 个性化推荐 =====

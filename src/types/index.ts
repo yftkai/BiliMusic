@@ -39,6 +39,8 @@ export interface AppSettings {
   playQuality: '标准' | '高品质' | '无损'
   downloadQuality: '标准' | '高品质' | '无损'
   downloadDir: string
+  downloadWriteMeta: boolean
+  downloadSaveLyric: boolean
   autoPlay: boolean
   showLyrics: boolean
 }

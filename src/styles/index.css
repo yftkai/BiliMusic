@@ -3397,6 +3397,182 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/* ===== 下载管理列表 ===== */
+.download-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 6px 14px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.download-list-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  transition: color .16s, background .16s;
+}
+
+.download-list-toolbar button:hover {
+  color: var(--color-text);
+  background: var(--player-hover);
+}
+
+.download-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.download-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  transition: background .16s, border-color .16s;
+}
+
+.download-row:hover {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+}
+
+.download-row__cover {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--player-hover);
+  color: var(--color-muted);
+}
+
+.download-row__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.download-row__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.download-row__title {
+  font-size: 14px;
+  font-weight: 640;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-row__meta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-row__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.download-row__progress-track {
+  flex: 1;
+  max-width: 280px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--player-hover);
+  overflow: hidden;
+}
+
+.download-row__progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #0ae, #5af);
+  transition: width .2s ease;
+}
+
+.download-row__progress span {
+  font-size: 11px;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.download-row__error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #e5484d;
+}
+
+.download-row__done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #2f9e6b;
+}
+
+.download-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.download-row__actions button {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: color .16s, background .16s;
+}
+
+.download-row__actions button:hover {
+  color: var(--color-text);
+  background: var(--player-hover);
+}
+
+.download-row__spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid var(--player-hover);
+  border-top-color: var(--color-muted);
+  animation: download-spin .8s linear infinite;
+}
+
+@keyframes download-spin {
+  to { transform: rotate(360deg); }
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(360px, 1fr));

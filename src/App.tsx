@@ -5,6 +5,7 @@ import { PlayerProvider } from '@/contexts/PlayerContext'
 import { NowPlayingProvider } from '@/contexts/NowPlayingContext'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { AddToPlaylistProvider } from '@/contexts/AddToPlaylistContext'
+import { DownloadProvider } from '@/contexts/DownloadContext'
 import LoginDialog from '@/components/LoginDialog'
 import MainLayout from '@/components/layout/MainLayout'
 import Discover from '@/pages/Discover'
@@ -41,6 +42,7 @@ export default function App() {
 
   return (
     <AuthProvider>
+      <DownloadProvider>
       <PlayerProvider>
         <NowPlayingProvider>
           <AddToPlaylistProvider>
@@ -62,6 +64,7 @@ export default function App() {
           </AddToPlaylistProvider>
         </NowPlayingProvider>
       </PlayerProvider>
+      </DownloadProvider>
     </AuthProvider>
   )
 }

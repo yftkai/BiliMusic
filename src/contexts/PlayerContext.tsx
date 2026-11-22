@@ -3,6 +3,7 @@ import type { Track, RepeatMode } from '@/types'
 import { extractAudio } from '@/services/api'
 import { addRecentTrack, toggleFavoriteTrack, loadFavoriteTracks } from '@/utils/storage'
 import { useAppSettings } from '@/hooks/useAppSettings'
+import { useDownloads } from '@/contexts/DownloadContext'
 
 interface PlayerState {
   currentTrack: Track | null
@@ -138,6 +139,10 @@ function clearMediaSessionActions(actions: MediaSessionAction[]): void {
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const { settings } = useAppSettings()
+  const downloads = useDownloads()
+  // 用 ref 保存本地文件查询函数，避免 getLocalFile 变化触发音频重载
+  const getLocalFileRef = useRef(downloads.getLocalFile)
+  getLocalFileRef.current = downloads.getLocalFile
   const restoredRef = useRef(loadPersistedPlayerState())
   const [currentTrack, setCurrentTrack] = useState<Track | null>(() => restoredRef.current.currentTrack)
   const [isPlaying, setIsPlaying] = useState(() => Boolean(restoredRef.current.currentTrack && restoredRef.current.wasPlaying))
@@ -149,6 +154,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [isShuffled, setIsShuffled] = useState(() => restoredRef.current.isShuffled)
   const [queue, setQueue] = useState<Track[]>(() => restoredRef.current.queue)
   const [loadingAudio, setLoadingAudio] = useState(false)
+  // 同一曲目重复点击播放时强制重载音频（effect 依赖 id 不会变化）
+  const [playToken, setPlayToken] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -175,6 +182,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const onDuration = () => setDuration(audio.duration || 0)
     const onEnded = () => { /* handled in playTrack */ }
     const onError = () => {
+      audio.pause()
       setLoadingAudio(false)
       setIsPlaying(false)
     }
@@ -265,12 +273,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     async function loadAndPlay() {
       setLoadingAudio(true)
       try {
+        const targetProgress = progress > 0 ? progress : 0
+
+        // 优先使用本地下载文件（离线可听且不受 B 站风控影响）
+        const localFile = getLocalFileRef.current(currentTrack!.id)
+        if (localFile) {
+          const normalized = localFile.replace(/\\/g, '/')
+          // 必须是标准带 host 的 URL（media://local/...）；media:/// 会被 Chromium
+          // 以 "Media load rejected by URL safety check" 拒绝，点击后表现为无反应。
+          audio.src = `media://local/${normalized.split('/').map((seg) => encodeURIComponent(seg)).join('/')}`
+          audio.currentTime = targetProgress
+          if (shouldAutoplayRef.current) {
+            await audio.play().catch(() => {})
+            setIsPlaying(true)
+          } else {
+            audio.pause()
+            setIsPlaying(false)
+          }
+          if (currentTrack!.duration) setDuration(currentTrack!.duration)
+          addRecentTrack(currentTrack!)
+          if (!cancelled) setLoadingAudio(false)
+          return
+        }
+
         const fallback = currentTrack!.aid && currentTrack!.cid
           ? { aid: currentTrack!.aid, cid: currentTrack!.cid }
           : undefined
         const source = await extractAudio(currentTrack!.bvid || currentTrack!.id, fallback)
         if (cancelled) return
-        const targetProgress = progress > 0 ? progress : 0
         audio.src = source.audioUrl
         audio.currentTime = targetProgress
         if (shouldAutoplayRef.current) {
@@ -300,7 +330,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     loadAndPlay()
     return () => { cancelled = true }
-  }, [currentTrack?.id, currentTrack?.bvid])
+  }, [currentTrack?.id, currentTrack?.bvid, playToken])
 
   // ended 事件
   useEffect(() => {
@@ -312,6 +342,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const play = useCallback((track: Track) => {
     shouldAutoplayRef.current = true
+    setPlayToken((t) => t + 1)
     setCurrentTrack(track)
     setProgress(0)
     const displayQueue = isShuffled ? shuffledQueueRef.current : queue
@@ -443,6 +474,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // 立即播放：把曲目置于队列首位并播放（点击歌曲的默认行为）
   const playNow = useCallback((track: Track) => {
     shouldAutoplayRef.current = true
+    setPlayToken((t) => t + 1)
     setQueue(prev => [track, ...prev.filter(t => t.id !== track.id)])
     setCurrentTrack(track)
     setProgress(0)
@@ -491,6 +523,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const synced = tracks.map(t => ({ ...t, isLiked: favIds.has(t.id) }))
     setQueue(synced)
     shouldAutoplayRef.current = true
+    setPlayToken((t) => t + 1)
     setCurrentTrack(synced[0])
     currentIndexRef.current = 0
     setProgress(0)
@@ -502,6 +535,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (index < 0 || index >= displayQueue.length) return
     currentIndexRef.current = index
     shouldAutoplayRef.current = true
+    setPlayToken((t) => t + 1)
     setCurrentTrack(displayQueue[index])
     setProgress(0)
     setIsPlaying(true)

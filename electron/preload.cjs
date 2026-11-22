@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 console.log('[preload] Electron preload script starting...')
 
+const openPath = (targetPath, options) =>
+  ipcRenderer.invoke('shell:open-path', targetPath, options)
+
+const readFileAsDataUrl = (filePath) =>
+  ipcRenderer.invoke('shell:read-file-dataurl', filePath)
+
 const biliApi = {
   search: (keyword, page, pageSize) =>
     ipcRenderer.invoke('bili:search', keyword, page, pageSize),
@@ -32,6 +38,21 @@ const biliApi = {
 
   downloadAudio: (audioUrl, filename) =>
     ipcRenderer.invoke('bili:downloadAudio', audioUrl, filename),
+
+  // 完整下载流程（含元数据/封面/歌词）
+  download: (task) =>
+    ipcRenderer.invoke('bili:download', task),
+  onDownloadProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('bili:download-progress', listener)
+    return () => ipcRenderer.removeListener('bili:download-progress', listener)
+  },
+
+  // 打开本地文件/目录（资源管理器）
+  openPath,
+
+  // 读取本地文件为 data URL（用于本地封面显示）
+  readFileAsDataUrl,
 
   // 扫码登录
   qrGenerate: () =>
@@ -88,6 +109,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('tray:player-command', listener)
   },
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  // 打开本地文件/目录（顶层桥接，供下载页直接调用）
+  openPath,
+  readFileAsDataUrl,
   getAppVersion: () => ipcRenderer.invoke('app:get-version'),
   checkForUpdate: () => ipcRenderer.invoke('updater:check'),
   quitAndInstall: () => ipcRenderer.send('updater:quit-and-install'),

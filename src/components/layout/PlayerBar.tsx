@@ -15,10 +15,13 @@ import {
   Mic,
   Music,
   Maximize2,
+  Download,
+  CircleCheckBig,
 } from 'lucide-react'
 import { usePlayer, usePlayerProgress } from '@/contexts/PlayerContext'
 import { useNowPlaying } from '@/contexts/NowPlayingContext'
 import { useAddToPlaylist } from '@/contexts/AddToPlaylistContext'
+import { useDownloads } from '@/contexts/DownloadContext'
 import PlayQueue from '@/components/PlayQueue'
 import PlayerSlider from '@/components/PlayerSlider'
 
@@ -226,6 +229,7 @@ export default function PlayerBar() {
 
         {player.currentTrack && (
           <>
+            <DownloadCurrentButton />
             <IconButton
               ariaLabel="添加至歌单"
               onClick={() => openAddToPlaylist(player.currentTrack!)}
@@ -415,6 +419,7 @@ function PlayButton({ isPlaying, loading, onClick }: { isPlaying: boolean; loadi
       type="button"
       onClick={onClick}
       disabled={loading}
+      aria-label={isPlaying ? '暂停' : '播放'}
       whileHover={{ scale: loading ? 1 : 1.06, backgroundColor: 'var(--player-hover)' }}
       whileTap={{ scale: loading ? 1 : 0.94 }}
       transition={spring}
@@ -488,6 +493,24 @@ function TransportButton({
     >
       {children}
     </motion.button>
+  )
+}
+
+function DownloadCurrentButton() {
+  const { currentTrack } = usePlayer()
+  const downloads = useDownloads()
+  if (!currentTrack) return null
+  const track = currentTrack
+  const downloaded = downloads.isDownloaded(track.id)
+  const busy = downloads.records.some(r => r.id === track.id && (r.status === 'downloading' || r.status === 'queued'))
+  return (
+    <IconButton
+      ariaLabel={downloaded ? '已下载' : busy ? '下载中' : '下载当前歌曲'}
+      active={downloaded}
+      onClick={() => { if (!downloaded && !busy) downloads.enqueue(track) }}
+    >
+      {downloaded ? <CircleCheckBig size={18} /> : <Download size={18} />}
+    </IconButton>
   )
 }
 

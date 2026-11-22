@@ -16,10 +16,14 @@ const isHarmonyOS = (process.platform as string) === 'openharmony'
 // 提供合法 origin，模块脚本与相对资源即可正常加载。须在 app ready 之前注册。
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  // 本地下载音频播放：http(app://) 页面直接 <audio src="file://"> 会被 CORS 拦截，
+  // 用标准安全协议 media:// 映射到本地文件，支持 Range 请求（拖动进度）。
+  { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ])
 
 // Chrome MCP 远程调试（开发时使用）
-app.commandLine.appendSwitch('remote-debugging-port', '17689')
+// 允许测试实例用独立端口，避免与用户正在运行的实例抢 17689
+app.commandLine.appendSwitch('remote-debugging-port', process.env.BILIMUSIC_DEBUG_PORT || '17689')
 app.commandLine.appendSwitch('remote-allow-origins', '*')
 
 // B站请求头处理
@@ -618,7 +622,101 @@ ipcMain.handle('shell:open-external', (_event, url: string) => {
   if (typeof url === 'string' && /^https?:\/\//i.test(url)) return shell.openExternal(url)
 })
 
+// 用系统默认方式打开本地文件/目录（下载完成后「打开文件」「打开目录」）
+ipcMain.handle('shell:open-path', async (
+  _event,
+  targetPath: string,
+  options?: { createIfMissing?: boolean },
+) => {
+  if (typeof targetPath !== 'string' || !targetPath) return { ok: false }
+  try {
+    // 「打开目录」允许在下载目录尚未创建时自动建立，避免点击无反应
+    if (options?.createIfMissing && !fs.existsSync(targetPath)) {
+      await fs.promises.mkdir(targetPath, { recursive: true })
+    }
+    const result = await shell.openPath(targetPath)
+    return { ok: result === '', error: result }
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) }
+  }
+})
+
+// 读取本地文件为 data URL（下载条目的本地封面回显）
+ipcMain.handle('shell:read-file-dataurl', async (_event, filePath: string) => {
+  if (typeof filePath !== 'string' || !filePath) return ''
+  try {
+    const { readFile } = await import('fs/promises')
+    const data = await readFile(filePath)
+    const ext = filePath.toLowerCase().split('.').pop()
+    const mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'
+    return `data:${mime};base64,${data.toString('base64')}`
+  } catch {
+    return ''
+  }
+})
+
 app.whenReady().then(() => {
+  // 本地下载文件播放协议：media:///<绝对路径的 URL 编码>，例如 media:///D%3A/Music/a.m4a
+  // 使用 net.fetch(fileURL) 透传，天然支持 Range 请求（音频拖动进度）。
+  protocol.handle('media', async (request) => {
+    try {
+      const raw = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, '')
+      // Windows 盘符路径：/D:/Music/x -> D:/Music/x
+      const filePath = /^[A-Za-z]:/.test(raw) ? raw : path.resolve(raw)
+      const stat = await fs.promises.stat(filePath)
+      if (!stat.isFile()) return new Response('Not Found', { status: 404 })
+
+      const ext = path.extname(filePath).toLowerCase()
+      const mime = ext === '.mp3' ? 'audio/mpeg'
+        : ext === '.m4a' || ext === '.aac' ? 'audio/mp4'
+        : ext === '.flac' ? 'audio/flac'
+        : ext === '.wav' ? 'audio/wav'
+        : ext === '.ogg' ? 'audio/ogg'
+        : 'application/octet-stream'
+
+      const headers = new Headers({
+        'Content-Type': mime,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-cache',
+      })
+
+      // 必须显式提供 Content-Length，否则 Chromium 将本地音频视作无限长流，
+      // 打包后出现 readyState=4 但 duration=Infinity、进度条无法拖动。
+      const range = request.headers.get('range')
+      const match = range ? /^bytes=(\d*)-(\d*)$/.exec(range.trim()) : null
+      if (match) {
+        const size = stat.size
+        let start = match[1] ? Number(match[1]) : 0
+        let end = match[2] ? Number(match[2]) : size - 1
+        if (!Number.isFinite(start) || start < 0 || start >= size) {
+          return new Response('Range Not Satisfiable', {
+            status: 416,
+            headers: { 'Content-Range': `bytes */${size}` },
+          })
+        }
+        end = Number.isFinite(end) ? Math.min(end, size - 1) : size - 1
+        if (end < start) end = start
+        const buf = Buffer.alloc(end - start + 1)
+        const handle = await fs.promises.open(filePath, 'r')
+        try {
+          await handle.read(buf, 0, buf.length, start)
+        } finally {
+          await handle.close()
+        }
+        headers.set('Content-Length', String(buf.length))
+        headers.set('Content-Range', `bytes ${start}-${end}/${size}`)
+        return new Response(buf, { status: 206, headers })
+      }
+
+      const data = await fs.promises.readFile(filePath)
+      headers.set('Content-Length', String(data.length))
+      return new Response(data, { status: 200, headers })
+    } catch (err) {
+      console.log('[BiliMusic] media:// fetch FAILED:', request.url, err instanceof Error ? err.message : String(err))
+      return new Response('Not Found', { status: 404 })
+    }
+  })
+
   // 生产环境注册 app:// 协议，映射到打包后的 dist 目录（asar 内 file:// 读取透明支持）
   if (!process.env.VITE_DEV_SERVER_URL) {
     protocol.handle('app', async (request) => {

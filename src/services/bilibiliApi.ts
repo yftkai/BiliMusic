@@ -34,7 +34,7 @@ async function biliFetch<T>(path: string, options: BiliFetchOptions = {}): Promi
     },
   })
 
-  const data = await resp.json()
+  const data = await parseJsonResponse(resp, path)
   if (data.code !== 0) {
     throw new BiliApiError(data.code, data.message, path)
   }
@@ -48,6 +48,24 @@ class BiliApiError extends Error {
     super(`BiliBili API Error [${code}]: ${message} (${path})`)
     this.code = code
     this.path = path
+  }
+}
+
+/**
+ * 统一解析 B 站响应：接口被风控时返回 412 HTML 验证页，直接 resp.json()
+ * 会抛出 "Unexpected token '<'" 这类无意义的错误。这里先检查状态码与
+ * Content-Type，命中 HTML 时转成可读的 BiliApiError（-412），便于上层降级。
+ */
+async function parseJsonResponse<T = any>(resp: Response, path: string): Promise<T> {
+  const ctype = resp.headers.get('content-type') || ''
+  const looksHtml = ctype.includes('text/html') || ctype.includes('text/plain')
+  if (!resp.ok || looksHtml) {
+    throw new BiliApiError(-412, `请求被拦截（HTTP ${resp.status}，返回 ${ctype || '非 JSON 内容'}）`, path)
+  }
+  try {
+    return (await resp.json()) as T
+  } catch {
+    throw new BiliApiError(-1, '接口返回的数据格式无效', path)
   }
 }
 
@@ -140,7 +158,7 @@ async function getWbiKeys(): Promise<{ imgKey: string; subKey: string }> {
     credentials: 'include',
     headers: { Referer: 'https://www.bilibili.com' },
   })
-  const json = await resp.json()
+  const json = await parseJsonResponse(resp, '/x/web-interface/nav')
   const imgUrl: string = json?.data?.wbi_img?.img_url || ''
   const subUrl: string = json?.data?.wbi_img?.sub_url || ''
   const imgKey = imgUrl.slice(imgUrl.lastIndexOf('/') + 1).split('.')[0]
@@ -217,7 +235,7 @@ export async function searchVideo(
     credentials: 'include',
     headers: { Referer: 'https://www.bilibili.com' },
   })
-  const data = await resp.json()
+  const data = await parseJsonResponse(resp, '/x/web-interface/wbi/search/type')
   if (data.code !== 0) {
     throw new BiliApiError(data.code, data.message, '/x/web-interface/wbi/search/type')
   }
@@ -261,7 +279,7 @@ export async function searchUser(
     credentials: 'include',
     headers: { Referer: 'https://www.bilibili.com' },
   })
-  const data = await resp.json()
+  const data = await parseJsonResponse(resp, '/x/web-interface/wbi/search/type')
   if (data.code !== 0) {
     throw new BiliApiError(data.code, data.message, '/x/web-interface/wbi/search/type')
   }
@@ -300,7 +318,7 @@ export async function getUserVideos(
     credentials: 'include',
     headers: { Referer: `https://space.bilibili.com/${mid}/video` },
   })
-  const data = await resp.json()
+  const data = await parseJsonResponse(resp, '/x/space/wbi/arc/search')
   if (data.code !== 0) {
     throw new BiliApiError(data.code, data.message, '/x/space/wbi/arc/search')
   }
@@ -689,7 +707,7 @@ export async function generateQrCode(): Promise<QrCodeData> {
     credentials: 'include',
     headers: { Referer: 'https://passport.bilibili.com/login' },
   })
-  const data = await resp.json()
+  const data = await parseJsonResponse(resp, 'qrGenerate')
   if (data.code !== 0) {
     throw new BiliApiError(data.code, data.message, 'qrGenerate')
   }
@@ -715,7 +733,7 @@ export async function pollQrCode(qrcodeKey: string): Promise<QrPollResult> {
       headers: { Referer: 'https://passport.bilibili.com/login' },
     },
   )
-  const data = await resp.json()
+  const data = await parseJsonResponse(resp, 'qrPoll')
   // 外层 code 是 API 结果，内层 data.code 才是扫码状态
   return {
     code: data.data?.code ?? data.code,

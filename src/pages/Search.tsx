@@ -593,7 +593,7 @@ function UserSpaceView({ user, onBack }: { user: SelectedUser; onBack: () => voi
     setError(null)
     pageRef.current = 1
     try {
-      const data = await getUserVideos(user.mid, 1, 30)
+      const data = await getUserVideos(user.mid, 1, 30, user.name)
       setVideos(data.items)
       setTotal(data.total)
     } catch (e: any) {
@@ -610,7 +610,7 @@ function UserSpaceView({ user, onBack }: { user: SelectedUser; onBack: () => voi
     setLoadingMore(true)
     try {
       const nextPage = pageRef.current + 1
-      const data = await getUserVideos(user.mid, nextPage, 30)
+      const data = await getUserVideos(user.mid, nextPage, 30, user.name)
       pageRef.current = nextPage
       setVideos(prev => [...prev, ...data.items])
     } catch {

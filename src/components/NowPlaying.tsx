@@ -4,8 +4,10 @@ import { useNavigate } from 'react-router-dom'
 import {
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat,
   Heart, Volume2, VolumeX, Search, Music, Loader2, Maximize2, Minimize2, X, MessageCircle, ExternalLink, ThumbsUp, RefreshCw,
+  Download, CircleCheckBig,
 } from 'lucide-react'
 import { usePlayer, usePlayerProgress } from '@/contexts/PlayerContext'
+import { useDownloads } from '@/contexts/DownloadContext'
 import { useNowPlaying } from '@/contexts/NowPlayingContext'
 import { useAppSettings } from '@/hooks/useAppSettings'
 import { useLyrics } from '@/hooks/useLyrics'
@@ -204,6 +206,7 @@ export default function NowPlaying() {
               <ChevronDown size={21} />
             </motion.button>
             <div className="now-playing-top__actions" style={noDrag}>
+              <NowPlayingDownloadButton />
               <motion.button
                 type="button"
                 className="now-playing-close"
@@ -666,4 +669,26 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function NowPlayingDownloadButton() {
+  const player = usePlayer()
+  const downloads = useDownloads()
+  const track = player.currentTrack
+  if (!track) return null
+  const downloaded = downloads.isDownloaded(track.id)
+  const busy = downloads.records.find(r => r.id === track.id && (r.status === 'downloading' || r.status === 'queued'))
+  return (
+    <motion.button
+      type="button"
+      className="now-playing-close"
+      onClick={() => { if (!downloaded && !busy) downloads.enqueue(track) }}
+      title={downloaded ? '已下载到本地' : busy ? `下载中 ${busy.percent}%` : '下载到本地'}
+      whileHover={{ y: 1, backgroundColor: 'rgba(255,255,255,0.18)' }}
+      whileTap={{ scale: 0.92 }}
+      style={downloaded ? { color: '#ff5c7a' } : undefined}
+    >
+      {downloaded ? <CircleCheckBig size={18} /> : <Download size={18} />}
+    </motion.button>
+  )
 }

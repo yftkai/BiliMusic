@@ -306,6 +306,12 @@ export default function Settings() {
                 options={['标准', '高品质', '无损']}
               />
             </SettingsRow>
+            <SettingsRow label="写入歌曲信息与封面" description="为下载文件写入标题、歌手、专辑与封面（ID3 标签）">
+              <ToggleSwitch checked={settings.downloadWriteMeta} onChange={() => setAppSettings({ downloadWriteMeta: !settings.downloadWriteMeta })} />
+            </SettingsRow>
+            <SettingsRow label="同时下载歌词" description="自动匹配歌词并保存为同名 .lrc 文件">
+              <ToggleSwitch checked={settings.downloadSaveLyric} onChange={() => setAppSettings({ downloadSaveLyric: !settings.downloadSaveLyric })} />
+            </SettingsRow>
           </SettingsGroup>
 
           <SettingsGroup title="歌单云同步" icon={<Cloud size={20} />}>

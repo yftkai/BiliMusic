@@ -1,3 +1,29 @@
+export interface DownloadTask {
+  id: string
+  bvid: string
+  aid?: string | number
+  cid?: string | number
+  title: string
+  artist: string
+  coverUrl: string
+  duration: number
+  targetDir: string
+  quality: '标准' | '高品质' | '无损'
+  writeMeta: boolean
+  saveLyric: boolean
+  lyricText?: string
+}
+
+export interface DownloadProgress {
+  id: string
+  phase: 'resolve' | 'audio' | 'cover' | 'meta' | 'done'
+  percent: number
+}
+
+export interface OpenPathOptions {
+  createIfMissing?: boolean
+}
+
 interface BiliApi {
   search: (keyword: string, page?: number, pageSize?: number) => Promise<any>
   videoDetail: (bvid: string) => Promise<any>
@@ -24,6 +50,14 @@ interface BiliApi {
     filePath: string
     size: number
   }>
+  download: (task: DownloadTask) => Promise<{
+    filePath: string
+    size: number
+    lyricPath?: string
+  }>
+  onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
+  openPath: (targetPath: string, options?: OpenPathOptions) => Promise<{ ok: boolean; error?: string }>
+  readFileAsDataUrl: (filePath: string) => Promise<string>
   qrGenerate: () => Promise<{
     url: string
     qrcodeKey: string
@@ -130,6 +164,8 @@ declare global {
       updateTrayPlayerState?: (state: TrayPlayerState) => void
       onTrayPlayerCommand?: (callback: (command: TrayPlayerCommand) => void) => () => void
       openExternal: (url: string) => Promise<void>
+      openPath?: (targetPath: string, options?: OpenPathOptions) => Promise<{ ok: boolean; error?: string }>
+      readFileAsDataUrl?: (filePath: string) => Promise<string>
       getAppVersion?: () => Promise<string>
       checkForUpdate?: () => Promise<void>
       quitAndInstall?: () => void

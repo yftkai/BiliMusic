@@ -5,7 +5,10 @@ design-system
 dist
 dist-electron
 release
+release-*
 node_modules
+.tmp-player-tests
+.workbuddy
 
 dev.log
 
